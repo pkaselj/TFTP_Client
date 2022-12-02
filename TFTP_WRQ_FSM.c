@@ -13,6 +13,13 @@
 
 #define DEBUG_MSG_SIZE 512
 
+// Use macro instead of function to preserve __LINE__ value used by _DEBUG_MSG
+#define _TFTP_WRQ_AssertValidHandle(HANDLE)                             \
+    if (NULL == pFSM)                                                   \
+    {                                                                   \
+        Log_Error(_DEBUG_MSG("Invalid handle to " _STR(TFTP_WRQ_FSM))); \
+    }
+
 /* -------------------------------------------------------------------------- */
 /*                                  TYPEDEFS                                  */
 /* -------------------------------------------------------------------------- */
@@ -31,7 +38,6 @@ typedef struct
 
 /* --------------------------------- PRIVATE -------------------------------- */
 
-PRIVATE inline void _TFTP_WRQ_AssertValidHandle(TFTP_WRQ_FSM *pFSM);
 PRIVATE inline void _TFTP_WRQ_ExecuteAction(TFTP_WRQ_FSM *pFSM, TFTP_WRQ_Action pAction, void *pData);
 PRIVATE void _TFTP_WRQ_WriteProcessEventLog(TFTP_WRQ_FSM *pFSM, TFTP_WRQ_EVENT_E event);
 
@@ -98,14 +104,6 @@ PRIVATE void _TFTP_WRQ_WriteProcessEventLog(TFTP_WRQ_FSM *pFSM, TFTP_WRQ_EVENT_E
         event);
 
     Log_Debug(szDebugMessage);
-}
-
-PRIVATE void _TFTP_WRQ_AssertValidHandle(TFTP_WRQ_FSM *pFSM)
-{
-    if (NULL == pFSM)
-    {
-        Log_Error(_DEBUG_MSG("Invalid handle to " _STR(TFTP_WRQ_FSM)));
-    }
 }
 
 PRIVATE inline void _TFTP_WRQ_Advance(TFTP_WRQ_FSM *pFSM, TFTP_WRQ_STATE_E newState)
