@@ -28,6 +28,7 @@ typedef struct
 } TFTP_WRQ_FSM;
 
 void TFTP_WRQ_Initialize(TFTP_WRQ_FSM *pFSM);
+void TFTP_WRQ_Reset(TFTP_WRQ_FSM *pFSM);
 void TFTP_WRQ_ProcessEvent(TFTP_WRQ_FSM *pFSM, TFTP_WRQ_EVENT_E event, void *pData);
 
 #endif

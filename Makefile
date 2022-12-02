@@ -10,12 +10,12 @@ CEXTRAFLAGS := \
 	-Wstrict-prototypes \
 	-Wstrict-overflow=5 \
 	-Wwrite-strings \
-	-Waggregate-return \
 	-Wcast-qual \
 	-Wswitch-default \
 	-Wswitch-enum \
 	-Wconversion \
 	-Wunreachable-code
+#	-Waggregate-return \
 
 CFLAGS := -O0 -std=c11 $(CEXTRAFLAGS)
 DEBUGFLAGS := -g -D_DEBUG

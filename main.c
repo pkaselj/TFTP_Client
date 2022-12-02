@@ -24,7 +24,12 @@ int main(void)
 
     TFTP_WRQ_FSM fsm;
     TFTP_WRQ_Initialize(&fsm);
-    TFTP_WRQ_ProcessEvent(&fsm, TFTP_WRQ_EVENT_TIMEOUT, NULL);
+
+    TFTP_WRQ_ProcessEvent(&fsm, TFTP_WRQ_EVENT_ERROR, NULL);
+    TFTP_WRQ_ProcessEvent(&fsm, TFTP_WRQ_EVENT_ERROR, NULL);
+    TFTP_WRQ_ProcessEvent(&fsm, TFTP_WRQ_STATE_ATTEMPT_INIT, NULL);
+    TFTP_WRQ_ProcessEvent(&fsm, TFTP_WRQ_EVENT_ERROR, NULL);
+    TFTP_WRQ_ProcessEvent(&fsm, TFTP_WRQ_STATE_ATTEMPT_INIT, NULL);
 
     printf("Hello, World!\n");
     return 0;
