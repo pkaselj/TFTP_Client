@@ -1,5 +1,23 @@
 CC := gcc
-CFLAGS := -Wall -O0 -std=c11 -g
+CEXTRAFLAGS := \
+	-Wall \
+	-Wextra \
+	-Wfloat-equal \
+	-Wundef \
+	-Wshadow \
+	-Wpointer-arith \
+	-Wcast-align \
+	-Wstrict-prototypes \
+	-Wstrict-overflow=5 \
+	-Wwrite-strings \
+	-Waggregate-return \
+	-Wcast-qual \
+	-Wswitch-default \
+	-Wswitch-enum \
+	-Wconversion \
+	-Wunreachable-code
+
+CFLAGS := -O0 -std=c11 -g $(CEXTRAFLAGS)
 CLIBFLAG := -c
 
 OUTDIR := build
