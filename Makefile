@@ -17,7 +17,8 @@ CEXTRAFLAGS := \
 	-Wconversion \
 	-Wunreachable-code
 
-CFLAGS := -O0 -std=c11 -g $(CEXTRAFLAGS)
+CFLAGS := -O0 -std=c11 $(CEXTRAFLAGS)
+DEBUGFLAGS := -g -D_DEBUG
 CLIBFLAG := -c
 
 OUTDIR := build
@@ -43,6 +44,7 @@ $(EXECUTABLE): $(OBJECTS)
 $(OUTDIR)/%.o: $(SRC)/%.c
 	$(CC) $(CLIBFLAG) -I$(INCLUDE) $(CFLAGS) -o $@ $<
 
+build-debug: CFLAGS += $(DEBUGFLAGS)
 build-debug: $(OUTDIR) $(EXECUTABLE)
 	@echo EXE: $(EXECUTABLE)
 	@echo SOURCES: $(SOURCES)
