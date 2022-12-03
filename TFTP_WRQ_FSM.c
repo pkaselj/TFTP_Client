@@ -13,13 +13,22 @@
 
 #define DEBUG_MSG_SIZE 512
 
+#define MESSAGE_TIMEOUT_MS 3000
+
 // Use macro instead of function to preserve __LINE__ value used by _DEBUG_MSG
 #define _TFTP_WRQ_AssertValidHandle(HANDLE)                             \
-    if (NULL == HANDLE)                                                   \
+    if (NULL == HANDLE)                                                 \
     {                                                                   \
         Log_Error(_DEBUG_MSG("Invalid handle to " _STR(TFTP_WRQ_FSM))); \
     }
 
+
+#define _TFTP_WRQ_DefineTransition(CALLBACK, NEW_STATE)                   \
+    (TFTP_WRQ_Transition)                                               \
+    {                                                                   \
+        .m_actionCallback = CALLBACK,                                   \
+        .m_newState = NEW_STATE                                         \
+    }
 /* -------------------------------------------------------------------------- */
 /*                                  TYPEDEFS                                  */
 /* -------------------------------------------------------------------------- */
@@ -52,6 +61,9 @@ PRIVATE inline TFTP_WRQ_Transition _TFTP_WRQ_GetTransition_STATE_ATTEMPT_DATA_LA
 
 PRIVATE void _TFTP_WRQ_Action_DoVoid(TFTP_WRQ_FSM *pFSM, void *pData);
 PRIVATE void _TFTP_WRQ_Action_DoHandleError(TFTP_WRQ_FSM *pFSM, void *pData);
+PRIVATE void _TFTP_WRQ_Action_DoSendWRQ(TFTP_WRQ_FSM *pFSM, void *pData);
+PRIVATE void _TFTP_WRQ_Action_DoRetrySendLastBlock(TFTP_WRQ_FSM *pFSM, void *pData);
+PRIVATE void _TFTP_WRQ_Action_DoSendNextBlock(TFTP_WRQ_FSM *pFSM, void *pData);
 
 /* -------------------------------------------------------------------------- */
 /*                                   GLOBALS                                  */
@@ -67,8 +79,45 @@ void TFTP_WRQ_Initialize(TFTP_WRQ_FSM *pFSM)
 {
     _TFTP_WRQ_AssertValidHandle(pFSM);
 
+    pFSM->m_fIsInitialized = false;
+
     pFSM->m_currentState = TFTP_WRQ_STATE_IDLE;
+    
+    Timer_Error_E error = Timer_Create(&pFSM->m_timer, MESSAGE_TIMEOUT_MS);
+    if (TIMER_ERROR_OK != error)
+    {
+        Log_Error(_DEBUG_MSG("Error while initializing timer."));
+    }
+    
     pFSM->m_fIsInitialized = true;
+}
+
+void TFTP_WRQ_Deinitialize(TFTP_WRQ_FSM *pFSM)
+{
+    _TFTP_WRQ_AssertValidHandle(pFSM);
+
+    if (false == pFSM->m_fIsInitialized)
+    {
+        Log_Warning(_DEBUG_MSG(_STR(TFTP_WRQ_FSM) " is already deinitialized. Skipping deinitialization..."));
+        return;
+    }
+
+    Timer_Error_E error;
+
+    error = Timer_Stop(&pFSM->m_timer);
+    if (TIMER_ERROR_OK != error)
+    {
+        Log_Warning(_DEBUG_MSG("Error while trying to stop timer!"));
+    }
+    
+    error = Timer_Destroy(&pFSM->m_timer);
+    if (TIMER_ERROR_OK != error)
+    {
+        Log_Warning(_DEBUG_MSG("Error while trying to destroy timer!"));
+    }
+
+    pFSM->m_fIsInitialized = false;
+    
 }
 
 void TFTP_WRQ_ProcessEvent(TFTP_WRQ_FSM *pFSM, TFTP_WRQ_EVENT_E event, void *pData)
@@ -141,27 +190,25 @@ PRIVATE TFTP_WRQ_Transition _TFTP_WRQ_GetTransition(TFTP_WRQ_STATE_E currentStat
     case TFTP_WRQ_STATE_ATTEMPT_DATA_LAST_BLOCK:
         return _TFTP_WRQ_GetTransition_STATE_ATTEMPT_DATA_LAST_BLOCK(triggerEvent);
     default:
-        return (TFTP_WRQ_Transition){
-            .m_actionCallback = _TFTP_WRQ_Action_DoVoid,
-            .m_newState = currentState};
+        return _TFTP_WRQ_DefineTransition(_TFTP_WRQ_Action_DoVoid, currentState);
     }
 }
 
+
+// TODO: Transitions
 PRIVATE inline TFTP_WRQ_Transition _TFTP_WRQ_GetTransition_STATE_IDLE(TFTP_WRQ_EVENT_E triggerEvent)
 {
     switch (triggerEvent)
     {
-    case TFTP_WRQ_EVENT_ERROR:
-        return (TFTP_WRQ_Transition){
-            .m_actionCallback = _TFTP_WRQ_Action_DoHandleError,
-            .m_newState = TFTP_WRQ_STATE_ERROR};
     case TFTP_WRQ_EVENT_TIMEOUT:
-    case TFTP_WRQ_EVENT_RECV_ACK_EQ_0:
     case TFTP_WRQ_EVENT_RECV_ACK_NOT_0:
+    case TFTP_WRQ_EVENT_ERROR:
+        return _TFTP_WRQ_DefineTransition(_TFTP_WRQ_Action_DoHandleError, TFTP_WRQ_STATE_ERROR);
+    case TFTP_WRQ_EVENT_RECV_ACK_EQ_0:
+        return _TFTP_WRQ_DefineTransition(_TFTP_WRQ_Action_DoSendFirstBlock, TFTP_WRQ_STATE_ATTEMPT_DATA);
+    case TFTP_WRQ_EVENT_RESET:
     default:
-        return (TFTP_WRQ_Transition){
-            .m_actionCallback = _TFTP_WRQ_Action_DoVoid,
-            .m_newState = TFTP_WRQ_STATE_IDLE};
+        return _TFTP_WRQ_DefineTransition(_TFTP_WRQ_Action_DoVoid, TFTP_WRQ_STATE_IDLE);
     }
 }
 
@@ -170,44 +217,63 @@ PRIVATE inline TFTP_WRQ_Transition _TFTP_WRQ_GetTransition_STATE_ERROR(TFTP_WRQ_
     switch (triggerEvent)
     {
     case TFTP_WRQ_EVENT_ERROR:
-        return (TFTP_WRQ_Transition){
-            .m_actionCallback = _TFTP_WRQ_Action_DoHandleError,
-            .m_newState = TFTP_WRQ_STATE_ERROR};
-    case TFTP_WRQ_STATE_ATTEMPT_INIT:
-        return (TFTP_WRQ_Transition){
-            .m_actionCallback = _TFTP_WRQ_Action_DoVoid,
-            .m_newState = TFTP_WRQ_STATE_IDLE};
+        return _TFTP_WRQ_DefineTransition(_TFTP_WRQ_Action_DoHandleError, TFTP_WRQ_STATE_ERROR);
+    case TFTP_WRQ_EVENT_RESET:
+        return _TFTP_WRQ_DefineTransition(_TFTP_WRQ_Action_DoVoid, TFTP_WRQ_STATE_IDLE);
     case TFTP_WRQ_EVENT_TIMEOUT:
     case TFTP_WRQ_EVENT_RECV_ACK_NOT_0:
+    case TFTP_WRQ_EVENT_RECV_ACK_EQ_0:
     default:
-        return (TFTP_WRQ_Transition){
-            .m_actionCallback = _TFTP_WRQ_Action_DoVoid,
-            .m_newState = TFTP_WRQ_STATE_IDLE};
+        return _TFTP_WRQ_DefineTransition(_TFTP_WRQ_Action_DoVoid, TFTP_WRQ_STATE_IDLE);
     }
 }
 
 PRIVATE inline TFTP_WRQ_Transition _TFTP_WRQ_GetTransition_STATE_ATTEMPT_INIT(TFTP_WRQ_EVENT_E triggerEvent)
 {
-    UNUSED(triggerEvent);
-    return (TFTP_WRQ_Transition){
-        .m_actionCallback = _TFTP_WRQ_Action_DoVoid,
-        .m_newState = TFTP_WRQ_STATE_ERROR};
+    switch (triggerEvent)
+    {
+    case TFTP_WRQ_EVENT_ERROR:
+        return _TFTP_WRQ_DefineTransition(_TFTP_WRQ_Action_DoHandleError, TFTP_WRQ_STATE_ERROR);
+    case TFTP_WRQ_EVENT_RESET:
+        return _TFTP_WRQ_DefineTransition(_TFTP_WRQ_Action_DoVoid, TFTP_WRQ_STATE_IDLE);
+    case TFTP_WRQ_EVENT_TIMEOUT:
+    case TFTP_WRQ_EVENT_RECV_ACK_NOT_0:
+    case TFTP_WRQ_EVENT_RECV_ACK_EQ_0:
+    default:
+        return _TFTP_WRQ_DefineTransition(_TFTP_WRQ_Action_DoVoid, TFTP_WRQ_STATE_IDLE);
+    }
 }
 
 PRIVATE inline TFTP_WRQ_Transition _TFTP_WRQ_GetTransition_STATE_ATTEMPT_DATA(TFTP_WRQ_EVENT_E triggerEvent)
 {
-    UNUSED(triggerEvent);
-    return (TFTP_WRQ_Transition){
-        .m_actionCallback = _TFTP_WRQ_Action_DoVoid,
-        .m_newState = TFTP_WRQ_STATE_ERROR};
+    switch (triggerEvent)
+    {
+    case TFTP_WRQ_EVENT_ERROR:
+        return _TFTP_WRQ_DefineTransition(_TFTP_WRQ_Action_DoHandleError, TFTP_WRQ_STATE_ERROR);
+    case TFTP_WRQ_EVENT_RESET:
+        return _TFTP_WRQ_DefineTransition(_TFTP_WRQ_Action_DoVoid, TFTP_WRQ_STATE_IDLE);
+    case TFTP_WRQ_EVENT_TIMEOUT:
+    case TFTP_WRQ_EVENT_RECV_ACK_NOT_0:
+    case TFTP_WRQ_EVENT_RECV_ACK_EQ_0:
+    default:
+        return _TFTP_WRQ_DefineTransition(_TFTP_WRQ_Action_DoVoid, TFTP_WRQ_STATE_IDLE);
+    }
 }
 
 PRIVATE inline TFTP_WRQ_Transition _TFTP_WRQ_GetTransition_STATE_ATTEMPT_DATA_LAST_BLOCK(TFTP_WRQ_EVENT_E triggerEvent)
 {
-    UNUSED(triggerEvent);
-    return (TFTP_WRQ_Transition){
-        .m_actionCallback = _TFTP_WRQ_Action_DoVoid,
-        .m_newState = TFTP_WRQ_STATE_ERROR};
+    switch (triggerEvent)
+    {
+    case TFTP_WRQ_EVENT_ERROR:
+        return _TFTP_WRQ_DefineTransition(_TFTP_WRQ_Action_DoHandleError, TFTP_WRQ_STATE_ERROR);
+    case TFTP_WRQ_EVENT_RESET:
+        return _TFTP_WRQ_DefineTransition(_TFTP_WRQ_Action_DoVoid, TFTP_WRQ_STATE_IDLE);
+    case TFTP_WRQ_EVENT_TIMEOUT:
+    case TFTP_WRQ_EVENT_RECV_ACK_NOT_0:
+    case TFTP_WRQ_EVENT_RECV_ACK_EQ_0:
+    default:
+        return _TFTP_WRQ_DefineTransition(_TFTP_WRQ_Action_DoVoid, TFTP_WRQ_STATE_IDLE);
+    }
 }
 
 /* --------------------------- TRANSITION ACTIONS --------------------------- */
@@ -224,4 +290,28 @@ PRIVATE void _TFTP_WRQ_Action_DoHandleError(TFTP_WRQ_FSM *pFSM, void *pData)
     UNUSED(pData);
     UNUSED(pFSM);
     Log_Debug("Executed: " _STR(_TFTP_WRQ_Action_DoHandleError));
+}
+
+PRIVATE void _TFTP_WRQ_Action_DoSendWRQ(TFTP_WRQ_FSM *pFSM, void *pData)
+{
+    UNUSED(pData);
+    UNUSED(pFSM);
+}
+
+PRIVATE void _TFTP_WRQ_Action_DoRetrySendLastBlock(TFTP_WRQ_FSM *pFSM, void *pData)
+{
+    UNUSED(pData);
+    UNUSED(pFSM);
+}
+
+PRIVATE void _TFTP_WRQ_Action_DoSendNextBlock(TFTP_WRQ_FSM *pFSM, void *pData)
+{
+    UNUSED(pData);
+    UNUSED(pFSM);
+}
+
+PRIVATE void _TFTP_WRQ_Action_DoSendFirstBlock(TFTP_WRQ_FSM *pFSM, void *pData)
+{
+    UNUSED(pData);
+    UNUSED(pFSM);
 }
