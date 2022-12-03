@@ -83,7 +83,7 @@ LOG_ERROR_E Log_Success(const char *message)
 {
     if (g_pLogger == NULL || g_pLogger->m_fnSuccess == NULL)
     {
-        return LOG_ERROR_OK;
+        return LOG_ERROR_NOK;
     }
 
     _Log_Success(message);
@@ -95,7 +95,7 @@ LOG_ERROR_E Log_Debug(const char *message)
 {
     if (g_pLogger == NULL || g_pLogger->m_fnDebug == NULL)
     {
-        return LOG_ERROR_OK;
+        return LOG_ERROR_NOK;
     }
 
     _Log_Debug(message);
@@ -107,7 +107,7 @@ LOG_ERROR_E Log_Info(const char *message)
 {
     if (g_pLogger == NULL || g_pLogger->m_fnInfo == NULL)
     {
-        return LOG_ERROR_OK;
+        return LOG_ERROR_NOK;
     }
 
     _Log_Info(message);
@@ -119,7 +119,7 @@ LOG_ERROR_E Log_Warning(const char *message)
 {
     if (g_pLogger == NULL || g_pLogger->m_fnWarning == NULL)
     {
-        return LOG_ERROR_OK;
+        return LOG_ERROR_NOK;
     }
 
     _Log_Warning(message);
@@ -131,7 +131,7 @@ LOG_ERROR_E Log_Error(const char *message)
 {
     if (g_pLogger == NULL || g_pLogger->m_fnError == NULL)
     {
-        return LOG_ERROR_OK;
+        return LOG_ERROR_NOK;
     }
 
     _Log_Error(message);
@@ -147,7 +147,7 @@ PRIVATE LOG_ERROR_E _Log_Initialize_wLevel(LOG_LEVEL_FLAGS fLogLevel)
     g_pLogger = Log_CreateInstance(fLogLevel);
     if (g_pLogger == NULL)
     {
-        return LOG_ERROR_OK;
+        return LOG_ERROR_NOK;
     }
     return LOG_ERROR_OK;
 }
@@ -174,7 +174,7 @@ PRIVATE LOG_ERROR_E Log_DestroyInstance(HLOGGER *pHandle)
 {
     if (pHandle == NULL)
     {
-        return LOG_ERROR_OK;
+        return LOG_ERROR_NOK;
     }
 
     free(pHandle);

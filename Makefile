@@ -51,6 +51,7 @@ build-debug: $(OUTDIR) $(EXECUTABLE)
 	@echo INCLUDES: $(INCLUDES)
 	@echo OBJECTS: $(OBJECTS)
 
+build-release: $(OUTDIR) $(EXECUTABLE)
 
 $(OUTDIR):
 	mkdir $(OUTDIR)

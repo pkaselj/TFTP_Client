@@ -15,7 +15,7 @@
 
 // Use macro instead of function to preserve __LINE__ value used by _DEBUG_MSG
 #define _TFTP_WRQ_AssertValidHandle(HANDLE)                             \
-    if (NULL == pFSM)                                                   \
+    if (NULL == HANDLE)                                                   \
     {                                                                   \
         Log_Error(_DEBUG_MSG("Invalid handle to " _STR(TFTP_WRQ_FSM))); \
     }
